@@ -5,51 +5,43 @@ import {LibClone} from "solady/utils/LibClone.sol";
 import {Owned} from "solmate/auth/Owned.sol";
 import {ERC20} from "solmate/tokens/ERC20.sol";
 import {SafeTransferLib} from "solmate/utils/SafeTransferLib.sol";
-
-struct Contract {
-    uint256 contractId;
-    address party;
-    address counterparty;
-    address token;
-    uint256 startRate;
-    uint256 startTime;
-    ContractState state;
-    uint256 endRate;
-    uint256 expiryTime;
-}
-
-enum ContractState {
-    PENDING,
-    ACTIVE,
-    EXPIRED,
-    SETTLED
-}
+import {HedgeContract} from "./HedgeContract.sol";
 
 contract HedgeFactory is Owned {
+    //Clone me instead, new instance per asset bls
     using LibClone for address;
-
     using SafeTransferLib for ERC20;
 
-    event ContractCreated(
-        uint256 indexed ContractId,
-        address indexed currency,
-        address trueTokens,
-        address falseTokens,
-        uint256 strike,
-        uint256 maturity
-    );
+    event AssetAdded(address indexed asset);
 
-    event ContractEntered(uint256 indexed ContractId, address indexed caller, uint256 amount0, uint256 amount1);
-
-    event ContractRedemption(uint256 indexed ContractId, address indexed caller, uint256 amountIn, uint256 amountOut);
-
-    event ContractSettled(uint256 indexed ContractId, uint256 roundId, int256 answer);
+    event AssetRemoved(address indexed asset);
 
     /// -----------------------------------------------------------------------
     /// Factory Storage
     /// -----------------------------------------------------------------------
+    uint256 private contractCounter;
+    bool public paused = false;
+    address internal immutable HedgeContractImpl;
+    mapping(address => address) public hedgeContracts;
 
-    Market[] public markets;
+    modifier assetExists(address _asset) {
+        require(supportedAssets[_asset], "HedgeFactory: asset not supported");
+        _;
+    }
 
-    address internal immutable ContrastERC20Singleton;
+    constructor(address _impl) Owned(msg.sender) {
+        HedgeContractImpl = _impl;
+    }
+
+    function createAsset() external notPaused returns (address) {}
+    function enter() external notPaused {}
+    function redeem() external notPaused {}
+    function settle() external notPaused {}
+
+    function removeAsset(address _asset) external {
+        require(hedgeContracts[_asset], "HedgeFactory: asset not supported");
+        selfdestruct(payable(_asset));
+        hedgeContracts[_asset] = address(0);
+        emit AssetRemoved(_asset);
+    }
 }
